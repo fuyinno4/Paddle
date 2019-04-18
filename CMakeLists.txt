@@ -160,6 +160,8 @@ endif (NOT WIN32)
 if(WITH_PSLIB)
     include(external/libmct)
     include(external/pslib_brpc)
+    include(external/pslib_mlparallel)
+    include(external/pslib_mpi)
     include(external/pslib)
 endif(WITH_PSLIB)
 

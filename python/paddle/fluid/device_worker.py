@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__all__ = ['DeviceWorker', 'Hogwild', 'DownpourSGD']
+__all__ = ['DeviceWorker', 'Hogwild', 'DownpourSGD', 'GeoSGD']
 
 
 class DeviceWorker(object):
@@ -174,6 +174,24 @@ class DownpourSGD(DeviceWorker):
             downpour.push_dense = False
             downpour.push_sparse = False
 
+class GeoSGD(DeviceWorker):
+    def __init__(self):
+        super(GeoSGD, self).__init__()
+
+    def _gen_worker_desc(self, trainer_desc):
+        trainer_desc.device_worker_name = "GeoWorker"
+        geo_param = trainer_desc.geo_param
+        for src_table in self._fleet_desc.geo_trainer_param.dense_table:
+            dense_table = geo_param.dense_table.add()
+            dense_table.dense_value_name.extend(src_table.dense_variable_name)
+            dense_table.table_id = src_table.table_id
+        for src_table in self._fleet_desc.geo_trainer_param.sparse_table:
+            sparse_table = geo_param.sparse_table.add()
+            sparse_table.table_id = src_table.table_id
+            sparse_table.sparse_key_name.extend(src_table.slot_key)
+            sparse_table.sparse_value_name.extend(src_table.slot_value)
+        #self._fleet_desc.geo_trainer_param.thread_num = trainer_desc.thread_num
+        geo_param.comm_batch = self._fleet_desc.geo_trainer_param.comm_batch
 
 class DeviceWorkerFactory(object):
     def _create_device_worker(self, worker_type):

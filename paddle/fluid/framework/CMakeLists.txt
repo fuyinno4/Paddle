@@ -174,21 +174,21 @@ endif()
 cc_library(executor_gc_helper SRCS executor_gc_helper.cc DEPS scope proto_desc operator garbage_collector)
 if(WITH_DISTRIBUTE)
   cc_library(executor SRCS executor.cc multi_trainer.cc dataset_factory.cc
-  dist_multi_trainer.cc trainer_factory.cc trainer.cc data_feed_factory.cc
-  data_feed.cc device_worker.cc hogwild_worker.cc downpour_worker.cc
+  dist_multi_trainer.cc geo_dist_multi_trainer.cc trainer_factory.cc trainer.cc data_feed_factory.cc
+  data_feed.cc device_worker.cc hogwild_worker.cc downpour_worker.cc geo_worker.cc 
   pull_dense_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
-  device_context scope framework_proto trainer_desc_proto glog fs shell fleet_wrapper lodtensor_printer
+  device_context scope framework_proto trainer_desc_proto glog fs shell fleet_wrapper fleet_geo_wrapper lodtensor_printer
   lod_rank_table feed_fetch_method sendrecvop_rpc  ${GLOB_DISTRIBUTE_DEPS}
   graph_to_program_pass variable_helper data_feed_proto ${NGRAPH_EXE_DEPS} timer)
 set(DISTRIBUTE_COMPILE_FLAGS "-Wno-non-virtual-dtor -Wno-error=non-virtual-dtor -Wno-error=delete-non-virtual-dtor")
 set_source_files_properties(executor.cc PROPERTIES COMPILE_FLAGS ${DISTRIBUTE_COMPILE_FLAGS})
 else()
   cc_library(executor SRCS executor.cc multi_trainer.cc dataset_factory.cc
-  dist_multi_trainer.cc trainer_factory.cc trainer.cc data_feed_factory.cc
-  data_feed.cc device_worker.cc hogwild_worker.cc downpour_worker.cc
+  dist_multi_trainer.cc geo_dist_multi_trainer.cc trainer_factory.cc trainer.cc data_feed_factory.cc
+  data_feed.cc device_worker.cc hogwild_worker.cc downpour_worker.cc geo_worker.cc
   pull_dense_worker.cc device_worker_factory.cc data_set.cc DEPS op_registry
   device_context scope framework_proto data_feed_proto trainer_desc_proto glog
-  lod_rank_table fs shell fleet_wrapper lodtensor_printer feed_fetch_method
+  lod_rank_table fs shell fleet_wrapper fleet_geo_wrapper lodtensor_printer feed_fetch_method
   graph_to_program_pass variable_helper ${NGRAPH_EXE_DEPS} timer data_feed_proto)
   cc_test(test_naive_executor SRCS naive_executor_test.cc DEPS naive_executor elementwise_add_op)
 endif()
@@ -201,12 +201,12 @@ cc_library(parallel_executor SRCS parallel_executor.cc DEPS
         fast_threaded_ssa_graph_executor variable_helper)
 
 cc_library(async_executor SRCS async_executor.cc data_feed.cc data_feed_factory.cc
-           executor_thread_worker.cc multi_trainer.cc dist_multi_trainer.cc
+           executor_thread_worker.cc multi_trainer.cc dist_multi_trainer.cc geo_dist_multi_trainer.cc
            trainer_factory.cc trainer.cc device_worker.cc hogwild_worker.cc
-           downpour_worker.cc pull_dense_worker.cc device_worker_factory.cc
+           downpour_worker.cc pull_dense_worker.cc device_worker_factory.cc geo_worker.cc
            data_set.cc dataset_factory.cc
            DEPS op_registry device_context scope framework_proto
-           trainer_desc_proto glog lod_rank_table fleet_wrapper lodtensor_printer
+           trainer_desc_proto glog lod_rank_table fleet_wrapper fleet_geo_wrapper lodtensor_printer
            feed_fetch_method graph_to_program_pass data_feed_proto
            variable_helper timer fs shell)
 

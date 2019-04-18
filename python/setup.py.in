@@ -127,6 +127,7 @@ packages=['paddle',
           'paddle.fluid.incubate.fleet',
           'paddle.fluid.incubate.fleet.base',
           'paddle.fluid.incubate.fleet.parameter_server',
+          'paddle.fluid.incubate.fleet.geo_parameter_server',
           'paddle.fluid.incubate.fleet.p2p']
 
 with open('@PADDLE_SOURCE_DIR@/python/requirements.txt') as f:

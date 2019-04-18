@@ -497,7 +497,7 @@ void MultiSlotDataFeed::ReadThread() {
       ins_num++;
       queue_->Send(instance);
     }
-    VLOG(3) << "filename: " << filename << " inst num: " << ins_num;
+    VLOG(0) << "filename: " << filename << " inst num: " << ins_num;
   }
   queue_->Close();
 #endif

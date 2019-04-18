@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .trainer_desc import MultiTrainer, DistMultiTrainer
-from .device_worker import Hogwild, DownpourSGD
+from .trainer_desc import MultiTrainer, DistMultiTrainer, GeoDistMultiTrainer
+from .device_worker import Hogwild, DownpourSGD, GeoSGD
 
 __all__ = ["TrainerFactory"]
 

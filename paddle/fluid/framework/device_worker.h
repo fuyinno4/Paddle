@@ -24,6 +24,7 @@ limitations under the License. */
 
 #include "paddle/fluid/framework/data_feed.h"
 #include "paddle/fluid/framework/fleet/fleet_wrapper.h"
+#include "paddle/fluid/framework/fleet/fleet_geo_wrapper.h"
 #include "paddle/fluid/framework/lod_tensor.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/program_desc.h"
@@ -192,6 +193,29 @@ class DownpourWorker : public HogwildWorker {
   std::shared_ptr<PullDenseWorker> _pull_dense_worker;
   std::vector<::std::future<int32_t>> push_sparse_status_;
   std::vector<::std::future<int32_t>> push_dense_status_;
+};
+
+class GeoWorker : public HogwildWorker {
+ public:
+  GeoWorker() {}
+  virtual ~GeoWorker() {}
+  virtual void Initialize(const TrainerDesc& desc);
+  virtual void TrainFiles();
+  virtual void TrainFilesWithProfiler();
+
+ protected:
+  std::shared_ptr<paddle::framework::FleetGeoWrapper> fleet_ptr_;
+  void PushParams();
+  void AddFeatures();
+
+ private:
+  GeoWorkerParameter param_;
+
+  // tableid, input names
+  std::map<std::string, int> sparse_input_tableid_;
+  std::vector<int> ids_buffer_;
+  unsigned long learned_batch_;
+  unsigned long comm_batch_; 
 };
 
 }  // namespace framework

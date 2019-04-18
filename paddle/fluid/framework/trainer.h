@@ -91,5 +91,23 @@ class DistMultiTrainer : public MultiTrainer {
   std::shared_ptr<paddle::framework::PullDenseWorker> pull_dense_worker_;
 };
 
+class GeoDistMultiTrainer : public MultiTrainer {
+ public:
+  GeoDistMultiTrainer() {}
+  virtual ~GeoDistMultiTrainer() {}
+  virtual void Initialize(const TrainerDesc& trainer_desc, Dataset* data_set);
+  virtual void InitOtherEnv(const ProgramDesc& main_program);
+  virtual void Run();
+  virtual void Finalize();
+  void CollectVarNames();
+
+ protected:
+  GeoWorkerParameter param_;
+  std::shared_ptr<paddle::framework::FleetGeoWrapper> fleet_ptr_;
+  std::vector<std::string> sparse_var_names_;
+  std::vector<std::string> dense_var_names_;
+};
+
+
 }  // namespace framework
 }  // namespace paddle
