@@ -234,21 +234,21 @@ void FleetGeoWrapper::SetWorkerModel(
   if (!pslib_ptr_->is_worker()) {
       return;
   }
-  VLOG(0) << "set sparse param num: " << sparse_var_names.size();
+  VLOG(3) << "set sparse param num: " << sparse_var_names.size();
   for (size_t i = 0; i < sparse_var_names.size(); ++i) {
     Variable* var = scope.FindVar(sparse_var_names[i]);
     LoDTensor* tensor = var->GetMutable<LoDTensor>();
     float* w = tensor->data<float>();
-    VLOG(0) << "sparse" << i << ": " << w;
+    VLOG(3) << "sparse" << i << ": " << w;
     //pslib_ptr_->_worker_ptr->set_sparse_table(i, w);
   }
 
-  VLOG(0) << "set dense param num: " << dense_var_names.size();
+  VLOG(3) << "set dense param num: " << dense_var_names.size();
   for (size_t i = 0; i < dense_var_names.size(); ++i) {
     Variable* var = scope.FindVar(dense_var_names[i]);
     LoDTensor* tensor = var->GetMutable<LoDTensor>();
     float* w = tensor->data<float>();
-    VLOG(0) << "dense" << i << ": " << w;
+    VLOG(3) << "dense" << i << ": " << w;
     //pslib_ptr_->_worker_ptr->set_dense_table(i, w);
   }
 #endif
