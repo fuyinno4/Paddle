@@ -41,6 +41,7 @@ void GeoDistMultiTrainer::Initialize(const TrainerDesc& trainer_desc,
     workers_[i]->SetDeviceIndex(i);
     workers_[i]->SetDataFeed(readers[i]);
   }
+  SetDebug(trainer_desc.debug());
 }
 
 void GeoDistMultiTrainer::CollectVarNames() {
