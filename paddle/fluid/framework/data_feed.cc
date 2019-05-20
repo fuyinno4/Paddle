@@ -436,6 +436,12 @@ std::pair<int64_t, int64_t> InMemoryDataFeed<T>::GetMemoryDataInterval() {
   return std::make_pair(start, end);
 }
 
+template <typename T>
+void InMemoryDataFeed<T>::ReleaseChannelData() {
+  shuffled_ins_->Clear();
+  shuffled_ins_out_->Clear();
+}
+
 // explicit instantiation
 template class InMemoryDataFeed<std::vector<MultiSlotType>>;
 

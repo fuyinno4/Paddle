@@ -141,6 +141,9 @@ template <typename T>
 void DatasetImpl<T>::ReleaseMemory() {
   VLOG(3) << "DatasetImpl<T>::ReleaseMemory() begin";
   std::vector<T>().swap(memory_data_);
+  for (int i = 0; i < readers_.size(); ++i) {
+    readers_[i]->ReleaseChannelData();
+  }
   VLOG(3) << "DatasetImpl<T>::ReleaseMemory() end";
 }
 
