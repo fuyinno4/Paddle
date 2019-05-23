@@ -192,7 +192,7 @@ void FleetGeoWrapper::InitModel(
     float* w = tensor->data<float>();
     auto dims = tensor->dims();
     if (pslib_ptr_->is_worker()) {
-        VLOG(0) << "sparse" << i << ": " << w;
+        VLOG(3) << "sparse" << i << ": " << w;
         ++i;
         pslib_ptr_->_worker_ptr->register_sparse_table(w, dims[0], dims[1]);
     } else {
@@ -215,7 +215,7 @@ void FleetGeoWrapper::InitModel(
     int col_num = dims[dims.size() - 1];
     int row_num = count / col_num;
     if (pslib_ptr_->is_worker()) {
-        VLOG(0) << "dense" << i << ": " << w;
+        VLOG(3) << "dense" << i << ": " << w;
         ++i;
         pslib_ptr_->_worker_ptr->register_dense_table(w, row_num, col_num);
     } else {

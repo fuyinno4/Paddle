@@ -136,7 +136,7 @@ void GeoWorker::TrainFilesWithProfiler() {
 
 void GeoWorker::TrainFiles() {
   VLOG(3) << "Begin to train files";
-  VLOG(0) << "Comm batch" << comm_batch_;
+  VLOG(3) << "Comm batch" << comm_batch_;
   platform::SetNumThreads(1);
   device_reader_->Start();
   int batch_cnt = 0;
