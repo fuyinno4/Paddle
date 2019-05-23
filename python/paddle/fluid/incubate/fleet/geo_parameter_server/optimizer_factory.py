@@ -68,14 +68,14 @@ class DistributedGeoSGD(DistributedOptimizerImplBase):
         """
         Currently, backward function from SGDOptimizer
         """
-        print "###backward"
+        #print "###backward"
         self.optimizer_.backward(loss, startup_program, parameter_list, no_grad_set, callbacks)
 
     def apply_gradients(self, params_grads):
         """
         Currently, apply_gradients function from SGDOptimizer
         """
-        print "###apply_gradients"
+        #print "###apply_gradients"
         self.optimizer_.apply_gradients(params_grads)
 
     def minimize(self,
@@ -116,7 +116,7 @@ class DistributedGeoSGD(DistributedOptimizerImplBase):
         server = GeoServer()
         sparse_table_index = 0
         for emb_name in table_dict:        
-            print "add sparse table:", emb_name, ":", table_dict[emb_name]
+            #print "add sparse table:", emb_name, ":", table_dict[emb_name]
             server.add_sparse_table(sparse_table_index, table_dict[emb_name], emb_name)
             sparse_table_index += 1
 
@@ -139,7 +139,7 @@ class DistributedGeoSGD(DistributedOptimizerImplBase):
                 params.append(param)
 
         for param in params:
-            print "add dense table:", param
+            #print "add dense table:", param
             server.add_dense_table(dense_table_index, param)
             dense_table_index += 1
         ps_param.geo_trainer_param.CopyFrom(server.get_desc())
