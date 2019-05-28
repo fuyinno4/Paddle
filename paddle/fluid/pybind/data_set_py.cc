@@ -42,7 +42,7 @@ namespace paddle {
 namespace pybind {
 
 void BindDataset(py::module* m) {
-  py::class_<framework::Dataset, std::shared_ptr<framework::Dataset>>(*m,
+  py::class_<framework::Dataset, std::unique_ptr<framework::Dataset>>(*m,
                                                                       "Dataset")
       .def(py::init([](const std::string& name = "MultiSlotDataset") {
         return framework::DatasetFactory::CreateDataset(name);
@@ -66,7 +66,10 @@ void BindDataset(py::module* m) {
       .def("load_into_memory", &framework::Dataset::LoadIntoMemory)
       .def("release_memory", &framework::Dataset::ReleaseMemory)
       .def("local_shuffle", &framework::Dataset::LocalShuffle)
-      .def("global_shuffle", &framework::Dataset::GlobalShuffle);
+      .def("global_shuffle", &framework::Dataset::GlobalShuffle)
+      .def("get_memory_data_size", &framework::Dataset::GetMemoryDataSize)
+      .def("get_shuffle_data_size", &framework::Dataset::GetShuffleDataSize)
+      .def("destroy_readers", &framework::Dataset::DestroyReaders);
 }
 
 }  // end namespace pybind

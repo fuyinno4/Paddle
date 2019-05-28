@@ -75,7 +75,7 @@ void MultiTrainer::Finalize() {
   for (auto& th : threads_) {
     th.join();
   }
-  dataset_ptr_->DestroyReaders();
+//  dataset_ptr_->DestroyReaders();
   root_scope_->DropKids();
 }
 

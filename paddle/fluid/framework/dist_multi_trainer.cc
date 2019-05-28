@@ -72,7 +72,7 @@ void DistMultiTrainer::Finalize() {
     th.join();
   }
   pull_dense_worker_->Stop();
-  dataset_ptr_->DestroyReaders();
+//  dataset_ptr_->DestroyReaders();
   root_scope_->DropKids();
 }
 
