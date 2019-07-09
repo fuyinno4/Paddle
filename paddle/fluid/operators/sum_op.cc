@@ -14,6 +14,7 @@ limitations under the License. */
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "paddle/fluid/framework/var_type_inference.h"
@@ -110,7 +111,7 @@ class SumOp : public framework::OperatorWithKernel {
                        "Input var[%s] should not be nullptr", x_vars_name[idx]);
         auto tensor =
             framework::GetLoDTensorOrSelectedRowsValueFromVar(*x_vars[idx]);
-        if (tensor->numel() == 0) {
+        if (tensor->numel() <= 0 || (!tensor->IsInitialized())) {
           continue;
         }
         if (dtype == -1) {
@@ -237,13 +238,21 @@ class SumGradMaker : public framework::GradOpDescMakerBase {
   }
 };
 
+class SumInplace : public framework::InplaceOpInference {
+ public:
+  std::unordered_map<std::string, std::string> operator()(
+      const framework::OpDesc& op_desc, bool use_cuda) const override {
+    return {{"X", "Out"}};
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
 namespace ops = paddle::operators;
 
 REGISTER_OPERATOR(sum, ops::SumOp, ops::SumOpMaker, ops::SumGradMaker,
-                  ops::SumOpVarTypeInference);
+                  ops::SumOpVarTypeInference, ops::SumInplace);
 
 REGISTER_OP_CPU_KERNEL(
     sum, ops::SumKernel<paddle::platform::CPUDeviceContext, float>,

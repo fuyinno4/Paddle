@@ -26,20 +26,19 @@ namespace framework {
 void GeoDistMultiTrainer::Initialize(const TrainerDesc& trainer_desc,
                                   Dataset* dataset) {
   thread_num_ = trainer_desc.thread_num();
-  param_ = trainer_desc.geo_param();
   SetDataset(dataset);
-  workers_.resize(thread_num_);
 
-  dataset->CreateReaders();
-  const std::vector<std::shared_ptr<paddle::framework::DataFeed>> readers =
+  const std::vector<paddle::framework::DataFeed*> readers =
       dataset->GetReaders();
 
+  param_ = trainer_desc.geo_param();
+  workers_.resize(thread_num_);
   for (int i = 0; i < thread_num_; ++i) {
     workers_[i] = DeviceWorkerFactory::CreateDeviceWorker(
         trainer_desc.device_worker_name());
-    workers_[i]->Initialize(trainer_desc);
     workers_[i]->SetDeviceIndex(i);
     workers_[i]->SetDataFeed(readers[i]);
+    workers_[i]->Initialize(trainer_desc);
   }
   SetDebug(trainer_desc.debug());
 }

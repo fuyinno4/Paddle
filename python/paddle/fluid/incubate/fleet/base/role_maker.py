@@ -11,7 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
+
+from __future__ import print_function
+
+__all__ = [
+    'Role', 'RoleMakerBase', 'MPISymetricRoleMaker', 'UserDefinedRoleMaker',
+    'UserDefinedCollectiveRoleMaker', 'PaddleCloudRoleMaker'
+]
+
+import os
+
+
+class Role:
+    WORKER = 1
+    SERVER = 2
 
 
 class RoleMakerBase(object):
@@ -23,48 +36,111 @@ class RoleMakerBase(object):
     """
 
     def __init__(self):
-        self._role_maker_name = ""
-        self._trainer_endpoints = []
-        self._pserver_endpoints = []
+        self._worker_endpoints = []
+        self._server_endpoints = []
         self._role_is_generated = False
+        self._role = None
+        self._current_id = -1
 
-    def _is_worker(self):
+    def is_worker(self):
         """
         return is_worker() of current process
         """
         raise NotImplementedError("Please implement this method in child class")
 
-    def _is_server(self):
+    def is_server(self):
         """
         return is_server() of current process
         """
         raise NotImplementedError("Please implement this method in child class")
 
-    def _get_local_ip(self):
+    def is_first_worker(self):
         """
-        return get local ip
+        Check whether the node is the first instance of worker.
+        Returns:
+            bool: True if this is the first node of worker,
+                  False if not.
         """
-        import socket
-        self._ip = socket.gethostbyname(socket.gethostname())
-        return self._ip
+        raise NotImplementedError("Please implement this method in child class")
 
-    def _get_trainer_endpoints(self):
+    def worker_num(self):
+        """
+        Get current total worker number.
+
+        Returns:
+            int: worker number
+        """
+        raise NotImplementedError("Please implement this method in child class")
+
+    def worker_index(self):
+        """
+        Get current worker id.
+
+        Returns:
+            int: node id
+        """
+        raise NotImplementedError("Please implement this method in child class")
+
+    def server_index(self):
+        """
+        Get current server id.
+
+        Returns:
+            int: node id
+        """
+        raise NotImplementedError("Please implement this method in child class")
+
+    def get_trainer_endpoints(self):
         """
         return trainer endpoints
         """
-        return self._trainer_endpoints
+        return self._worker_endpoints
 
-    def _get_pserver_endpoints(self):
+    def get_pserver_endpoints(self):
         """
         return pserver endpoints
         """
-        return self._pserver_endpoints
+        return self._server_endpoints
 
-    def _generate_role(self):
-        """
-        generate_role() should be called to identify current process's role
-        """
-        raise NotImplementedError("Please implement this method in child class")
+
+class MultiProcessRoleMaker(RoleMakerBase):
+    """
+    MultiProcessRoleMaker is a default role maker for multi-process
+    GPU training. It works with paddle.distributed.lanuch.py by-design
+    """
+
+    def __init__(self):
+        super(MultiProcessRoleMaker, self).__init__()
+        self._role_is_generated = False
+
+    def generate_role(self):
+        import os
+        if not self._role_is_generated:
+            self._current_id = int(os.getenv("PADDLE_TRAINER_ID", "0"))
+            self._num_trainers = 1
+            self._training_role = os.getenv("PADDLE_TRAINING_ROLE", "TRAINER")
+            assert (self._training_role == "TRAINER")
+            self._worker_endpoints = os.getenv("PADDLE_TRAINER_ENDPOINTS")
+            self._current_endpoint = os.getenv("PADDLE_CURRENT_ENDPOINT")
+            if self._worker_endpoints:
+                self._worker_endpoints = self._worker_endpoints.split(",")
+                self._num_trainers = len(self._worker_endpoints)
+            self._role_is_generated = True
+
+    def is_worker(self):
+        return True
+
+    def is_server(self):
+        return False
+
+    def is_first_worker(self):
+        return self._current_id == 0
+
+    def worker_index(self):
+        return self._current_id
+
+    def worker_num(self):
+        return self._worker_num
 
 
 class MPIRoleMaker(RoleMakerBase):
@@ -76,9 +152,11 @@ class MPIRoleMaker(RoleMakerBase):
     def __init__(self):
         super(MPIRoleMaker, self).__init__()
         from mpi4py import MPI
-        self._comm = MPI.COMM_WORLD
         self.MPI = MPI
+        self._comm = MPI.COMM_WORLD
+        self._node_type_comm = None
         self._ips = None
+        self._ip = None
 
     def _get_rank(self):
         """
@@ -105,7 +183,7 @@ class MPIRoleMaker(RoleMakerBase):
         """
         worker_gather(obj) will call MPI's allgather function
         """
-        if self._is_worker():
+        if self.is_worker():
             self._node_type_comm.barrier()
             return self._node_type_comm.allgather(obj)
         return None
@@ -116,19 +194,33 @@ class MPIRoleMaker(RoleMakerBase):
         """
         self._comm.barrier()
 
-    def _get_ips(self):
-        """
-        collect current distributed job's ip list
-        """
-        if self._ips == None:
-            self._ips = self._comm.allgather(self._get_local_ip())
-        return self._ips
-
     def _finalize(self):
         """
         finalize the current MPI instance.
         """
-        pass
+        self.MPI.Finalize()
+
+    def _get_ips(self):
+        """
+        collect current distributed job's ip list
+        """
+        if not self._ips:
+            self._ips = self._comm.allgather(self.get_local_ip())
+        return self._ips
+
+    def get_local_ip(self):
+        """
+        return get local ip
+        """
+        import socket
+        self._ip = socket.gethostbyname(socket.gethostname())
+        return self._ip
+
+    def generate_role(self):
+        """
+        generate_role() should be called to identify current process's role
+        """
+        raise NotImplementedError("Please implement this method in child class")
 
 
 class MPISymetricRoleMaker(MPIRoleMaker):
@@ -142,23 +234,39 @@ class MPISymetricRoleMaker(MPIRoleMaker):
         super(MPISymetricRoleMaker, self).__init__()
         self._node_type = None
         self._proc_per_node = 2
+        self._pserver_rand_port = 0
 
     def _check_role_generation(self):
         if not self._role_is_generated:
-            sys.stderr.write("generate_role() should be called first")
-            sys.exit(-1)
-            return False
+            raise NameError("generate_role() should be called first")
         return True
 
-    def _is_first_worker(self):
+    def is_first_worker(self):
         """
         return whether current process is the first worker assigned by role maker
         """
         if self._check_role_generation():
-            return self._is_worker() and 0 == self._worker_index()
+            return self.is_worker() and 0 == self.worker_index()
         return False
 
-    def _is_worker(self):
+    def get_pserver_endpoints(self):
+        if self._pserver_rand_port <= 0:
+            import random
+            random.seed(self._server_num())
+            # port will be randomly generated from 60001 to 63999
+            # random seed is server num so that all nodes will get
+            # the same port
+            self._pserver_rand_port = random.randint(60001, 64000)
+        endpoints = [
+            x + ":" + str(self._pserver_rand_port)
+            for x in self._server_endpoints
+        ]
+        return endpoints
+
+    def worker_num(self):
+        return self._worker_num()
+
+    def is_worker(self):
         """
         return whether current process is worker assigned by role maker
         """
@@ -166,7 +274,7 @@ class MPISymetricRoleMaker(MPIRoleMaker):
             return self._node_type == 1
         return False
 
-    def _is_server(self):
+    def is_server(self):
         """
         return whether current process is server assigned by role maker
         """
@@ -179,8 +287,8 @@ class MPISymetricRoleMaker(MPIRoleMaker):
         return the current number of worker
         """
         if self._check_role_generation():
-            if self._is_worker():
-                return self._get_size() / 2
+            if self.is_worker():
+                return self._get_size() / self._proc_per_node
         return 0
 
     def _server_num(self):
@@ -188,50 +296,59 @@ class MPISymetricRoleMaker(MPIRoleMaker):
         return the current number of server
         """
         if self._check_role_generation():
-            if self._is_server():
-                return self._get_size() / 2
-        return 0
+            return self._get_size() / self._proc_per_node
+        else:
+            self.generate_role()
+            return self._get_size() / self._proc_per_node
 
-    def _worker_index(self):
+    def worker_index(self):
         """
         return the index of worker
         """
         if self._check_role_generation():
             return self._rank / self._proc_per_node
-        return 0
+        else:
+            self.generate_role()
+            return self._get_size() / 2
 
-    def _server_index(self):
+    def server_index(self):
         """
         return the index of server
         """
         if self._check_role_generation():
             return self._rank / self._proc_per_node
-        return 0
+        else:
+            self.generate_role()
+            return self._get_size() / self._proc_per_node
 
     def _barrier_worker(self):
         """
         barrier all workers in current distributed job
         """
         if self._check_role_generation():
-            if self._is_worker():
+            if self.is_worker():
                 self._node_type_comm.barrier()
+        else:
+            raise Exception("You should check role generation first")
 
     def _barrier_server(self):
         """
         barrier all servers in current distributed job
         """
         if self._check_role_generation():
-            if self._is_server():
+            if self.is_server():
                 self._node_type_comm.barrier()
+        else:
+            raise Exception("You should check role generation first")
 
-    def _generate_role(self):
+    def generate_role(self):
         """
         generate currently process's role
         """
         if not self._role_is_generated:
             # TODO(guru4elephant): only allow to be called once
-            self._trainer_endpoints = self._get_ips()
-            self._pserver_endpoints = self._get_ips()
+            self._worker_endpoints = self._get_ips()[1::2]
+            self._server_endpoints = self._get_ips()[::2]
 
             if 0 == self._get_rank() % self._proc_per_node % 2:
                 self._node_type = 0
@@ -239,3 +356,163 @@ class MPISymetricRoleMaker(MPIRoleMaker):
                 self._node_type = 1
             self._node_type_comm = self._comm.Split(self._node_type)
             self._role_is_generated = True
+        else:
+            raise Exception("You should check role generation first")
+
+
+class PaddleCloudRoleMaker(RoleMakerBase):
+    def __init__(self):
+        super(PaddleCloudRoleMaker, self).__init__()
+        self._role_is_generated = False
+
+    def generate_role(self):
+        if not self._role_is_generated:
+            self.port = os.getenv("PADDLE_PORT", "6174")
+            self.pserver_ips = os.getenv("PADDLE_PSERVERS", "")
+            eplist = []
+            for ip in self.pserver_ips.split(","):
+                eplist.append(':'.join([ip, self.port]))
+            self.endpoints = ",".join(eplist)
+            self._trainers = int(os.getenv("PADDLE_TRAINERS_NUM", "1"))
+            self.current_endpoint = os.getenv("POD_IP",
+                                              "localhost") + ":" + self.port
+            self.role = os.getenv("TRAINING_ROLE", "TRAINER")
+            self.trainer_id = int(os.getenv("PADDLE_TRAINER_ID", "0"))
+            self.eplist = eplist
+            print("PaddleCloudRoleMaker() endpoints: %s" % self.endpoints)
+            self.endpoints = self.endpoints.split(",")
+            self._server_endpoints = self.endpoints
+            self._worker_endpoints = self.endpoints
+            if self.role.upper() == "PSERVER":
+                self._current_id = self.endpoints.index(self.current_endpoint)
+                self._role = Role.SERVER
+            else:
+                self._current_id = self.trainer_id
+                self._role = Role.WORKER
+            self._role_is_generated = True
+
+    def is_worker(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._role == Role.WORKER
+
+    def is_server(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._role == Role.SERVER
+
+    def is_first_worker(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._role == Role.WORKER and self._current_id == 0
+
+    def worker_index(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._current_id
+
+    def server_index(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._current_id
+
+    def worker_num(self):
+        if not self._role_is_generated:
+            self.generate_role()
+        return self._trainers
+
+
+class UserDefinedRoleMaker(RoleMakerBase):
+    def __init__(self,
+                 current_id=0,
+                 role=Role.WORKER,
+                 worker_num=0,
+                 server_endpoints=None):
+        """
+        UserDefinedRoleMaker is designed for worker and server assignment
+        under manual. Typically, a worker and a server node will be appointed
+        on each physical node, It can be assign by user.
+        """
+        super(UserDefinedRoleMaker, self).__init__()
+
+        if not isinstance(current_id, int):
+            raise TypeError("current_id must be as int")
+        else:
+            if current_id < 0:
+                raise ValueError("current_id must be gather or equal 0")
+            self._current_id = current_id
+
+        if role != Role.WORKER and role != Role.SERVER:
+            raise TypeError("role must be as Role")
+        else:
+            self._role = role
+
+        if not isinstance(worker_num, int):
+            raise TypeError("worker_num must be as int")
+        else:
+            if worker_num < 0:
+                raise ValueError("worker_num must be gather or equal 0")
+            self._worker_num = worker_num
+
+        if not isinstance(server_endpoints, list):
+            raise TypeError("server_endpoints must be as string list")
+        else:
+            self._server_endpoints = server_endpoints
+
+    def generate_role(self):
+        self._role_is_generated = True
+
+    def is_worker(self):
+        return self._role == Role.WORKER
+
+    def is_server(self):
+        return self._role == Role.SERVER
+
+    def is_first_worker(self):
+        return self._role == Role.WORKER and self._current_id == 0
+
+    def worker_index(self):
+        return self._current_id
+
+    def server_index(self):
+        return self._current_id
+
+    def worker_num(self):
+        return self._worker_num
+
+
+class UserDefinedCollectiveRoleMaker(RoleMakerBase):
+    def __init__(self, current_id=0, worker_endpoints=None):
+        """
+        UserDefinedCollectiveRoleMaker is designed for worker assignment
+        under manual for collective mode.
+        """
+        super(UserDefinedCollectiveRoleMaker, self).__init__()
+
+        if not isinstance(current_id, int):
+            raise TypeError("current_id must be as int")
+        else:
+            if current_id < 0:
+                raise ValueError("current_id must be greater or equal 0")
+            self._current_id = current_id
+
+        if not isinstance(worker_endpoints, list):
+            raise TypeError("worker_endpoints must be as string list")
+        else:
+            self._worker_endpoints = worker_endpoints
+        self._worker_num = len(self._worker_endpoints)
+
+    def generate_role(self):
+        self._role_is_generated = True
+
+    def is_worker(self):
+        return True
+
+    def is_first_worker(self):
+        return self._current_id == 0
+
+    def worker_index(self):
+        return self._current_id
+
+    def worker_num(self):
+        return self._worker_num
