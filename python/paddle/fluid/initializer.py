@@ -250,32 +250,41 @@ class UniformInitializer(Initializer):
         return op
 
 
-class NormalInitializer(Initializer):
-    """Implements the Random Normal(Gaussian) distribution initializer
+class UniformInitializer(Initializer):
+    """Implements the random uniform distribution initializer
 
     Args:
-        loc (float): mean of the normal distribution
-        scale (float): standard deviation of the normal distribution
+        low (float): lower boundary of the uniform distribution
+        high (float): upper boundary of the uniform distribution
         seed (int): random seed
 
     Examples:
         .. code-block:: python
 
+            import paddle.fluid as fluid
+            x = fluid.layers.data(name='x', shape=[1], dtype='float32')
             fc = fluid.layers.fc(input=x, size=10,
-                param_attr=fluid.initializer.Normal(loc=0.0, scale=2.0))
+    		param_attr=fluid.initializer.Uniform(low=-0.5, high=0.5))
     """
 
-    def __init__(self, loc=0.0, scale=1.0, seed=0):
-        assert loc is not None
-        assert scale is not None
+    def __init__(self, low=-1.0, high=1.0, seed=0, diag_num=0, diag_step=0, diag_val=1.0):
+        assert low is not None
+        assert high is not None
+        assert high >= low
         assert seed is not None
-        super(NormalInitializer, self).__init__()
-        self._mean = loc
-        self._std_dev = scale
+        assert diag_num is not None
+        assert diag_step is not None
+        assert diag_val is not None
+        super(UniformInitializer, self).__init__()
+        self._low = low
+        self._high = high
         self._seed = seed
+        self._diag_num = diag_num
+        self._diag_step = diag_step
+        self._diag_val = diag_val
 
     def __call__(self, var, block):
-        """Add normal distribution initialization ops for a variable
+        """Add uniform distribution initialization ops for a variable
 
         Args:
             var: Variable that needs to be initialized
@@ -291,11 +300,12 @@ class NormalInitializer(Initializer):
         if self._seed == 0:
             self._seed = block.program.random_seed
 
-        # to be compatible of fp16 initalizers
+        # to be compatible of fp16 initializers
         if var.dtype == VarDesc.VarType.FP16:
             out_dtype = VarDesc.VarType.FP32
             out_var = block.create_var(
-                name=unique_name.generate(".".join(['gaussian_random', 'tmp'])),
+                name=unique_name.generate(".".join(
+                    ['uniform_random', var.name, 'tmp'])),
                 shape=var.shape,
                 dtype=out_dtype,
                 type=VarDesc.VarType.LOD_TENSOR,
@@ -305,15 +315,17 @@ class NormalInitializer(Initializer):
             out_var = var
 
         op = block._prepend_op(
-            type="gaussian_random",
+            type="uniform_random",
             outputs={"Out": out_var},
             attrs={
                 "shape": var.shape,
                 "dtype": out_dtype,
-                "mean": self._mean,
-                "std": self._std_dev,
+                "min": self._low,
+                "max": self._high,
                 "seed": self._seed,
-                "use_mkldnn": False
+                "diag_num": self._diag_num,
+                "diag_step": self._diag_step,
+                "diag_val": self._diag_val
             },
             stop_gradient=True)
 
@@ -324,6 +336,7 @@ class NormalInitializer(Initializer):
                 outputs={"Out": var},
                 attrs={"in_dtype": out_var.dtype,
                        "out_dtype": var.dtype})
+
         if not framework.in_dygraph_mode():
             var.op = op
         return op
