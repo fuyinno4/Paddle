@@ -250,6 +250,83 @@ class UniformInitializer(Initializer):
         return op
 
 
+class NormalInitializer(Initializer):
+    """Implements the Random Normal(Gaussian) distribution initializer
+    Args:
+        loc (float): mean of the normal distribution
+        scale (float): standard deviation of the normal distribution
+        seed (int): random seed
+    Examples:
+        .. code-block:: python
+	    import paddle.fluid as fluid
+        x = fluid.layers.data(name="data", shape=[32, 32], dtype="float32")
+	    fc = fluid.layers.fc(input=x, size=10,
+    		param_attr=fluid.initializer.Normal(loc=0.0, scale=2.0))
+    """
+
+    def __init__(self, loc=0.0, scale=1.0, seed=0):
+        assert loc is not None
+        assert scale is not None
+        assert seed is not None
+        super(NormalInitializer, self).__init__()
+        self._mean = loc
+        self._std_dev = scale
+        self._seed = seed
+
+    def __call__(self, var, block):
+        """Add normal distribution initialization ops for a variable
+        Args:
+            var: Variable that needs to be initialized
+            block: The block in which initialization ops
+                   should be added
+        Returns:
+            the initialization op
+        """
+        assert isinstance(var, framework.Variable)
+        assert isinstance(block, framework.Block)
+        # Initialization Ops should be prepended and not appended
+        if self._seed == 0:
+            self._seed = block.program.random_seed
+
+        # to be compatible of fp16 initalizers
+        if var.dtype == VarDesc.VarType.FP16:
+            out_dtype = VarDesc.VarType.FP32
+            out_var = block.create_var(
+                name=unique_name.generate(".".join(
+                    ['gaussian_random', var.name, 'tmp'])),
+                shape=var.shape,
+                dtype=out_dtype,
+                type=VarDesc.VarType.LOD_TENSOR,
+                persistable=False)
+        else:
+            out_dtype = var.dtype
+            out_var = var
+
+        op = block._prepend_op(
+            type="gaussian_random",
+            outputs={"Out": out_var},
+            attrs={
+                "shape": var.shape,
+                "dtype": out_dtype,
+                "mean": self._mean,
+                "std": self._std_dev,
+                "seed": self._seed,
+                "use_mkldnn": False
+            },
+            stop_gradient=True)
+
+        if var.dtype == VarDesc.VarType.FP16:
+            block.append_op(
+                type="cast",
+                inputs={"X": out_var},
+                outputs={"Out": var},
+                attrs={"in_dtype": out_var.dtype,
+                       "out_dtype": var.dtype})
+        if not framework.in_dygraph_mode():
+            var.op = op
+        return op
+
+
 class UniformInitializer(Initializer):
     """Implements the random uniform distribution initializer
 
